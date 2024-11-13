@@ -1,0 +1,450 @@
+<!DOCTYPE html>
+<html>
+
+<head>
+    <title>Kniffel</title>
+    <style>
+        body {
+            margin: auto;
+            width: 350px;
+        }
+
+        .wuerfel {
+            display: flex;
+            width: 70px;
+            height: 100px;
+            align-items: center;
+            justify-content: center;
+            margin: 0;
+            cursor: pointer;
+        }
+
+        .wuerfel:hover {
+            --diceBg: rgb(163, 163, 163);
+            --diceColor: rgb(0, 94, 22);
+        }
+
+        .wuerfel.fest {
+            --diceBg: rgb(119, 119, 119);
+        }
+
+        .wuerfel.fest:hover {
+            --diceColor: rgb(212, 0, 0);
+        }
+
+        .tabelle {
+            border-collapse: collapse;
+        }
+
+        .tabelle tr {
+            border-left: 1px solid black;
+            border-right: 1px solid black;
+            text-align: right;
+
+            & td {
+                padding: 2px 10px;
+            }
+
+            & .summe {
+                border-top: 1px solid black;
+                border-bottom: 1px solid black;
+            }
+
+            & .name.active {
+                background-color: rgb(255, 183, 67);
+                color: rgb(127, 32, 0);
+            }
+        }
+
+        .eintragbar .active {
+            background-color: rgba(98, 206, 4, 0.708);
+        }
+
+        .eintragbar:hover {
+            & .active {
+                background-color: rgb(98, 206, 4);
+            }
+
+            cursor: pointer;
+        }
+
+        .eintragbar.strich .active {
+            color: #990000;
+        }
+
+        .filled {
+            background-color: #ededed;
+        }
+
+        .name {
+            font-weight: bold;
+            white-space: nowrap;
+        }
+    </style>
+</head>
+
+<body>
+    <button style="float: right;" onclick="location.reload()">Neues Spiel</button>
+    <h4>Würfel:</h4>
+    <div style="display: flex; flex-wrap: wrap; margin-bottom: 10px;" id="wuerfel">
+    </div>
+    <button style="width: 100%; font-size: 1.3em;" onclick="wuerfeln()" id="wuerfeln">Würfeln</button>
+    <h4>Spiel:</h4>
+    <table class="tabelle" id="tabelle">
+    </table>
+    <script>
+        let wurf = 1;
+        let wuerfel = [1, 1, 1, 1, 1];
+        let fest = {};
+        let spielerDran = 0;
+
+        const spielerParameter = new URLSearchParams(location.search).get('spieler');
+        const spieler = spielerParameter ? spielerParameter.split(',') : ['Spieler 1', 'Spieler 2', 'Spieler 3', 'Spieler 4'];
+        const ergebnisse = Object.fromEntries(spieler.map(s => [s, {}]));
+
+        function wuerfelSumme(wuerfel) {
+            return wuerfel.reduce((a, b) => a + b, 0);
+        }
+
+        const felder = {
+            'Name': function ({ wuerfel, name, daten }) {
+                return name
+            },
+            '1er': function ({ wuerfel, name, daten }) {
+                return wuerfelSumme(wuerfel.filter(w => w === 1));
+            },
+            '2er': function ({ wuerfel, name, daten }) {
+                return wuerfelSumme(wuerfel.filter(w => w === 2));
+            },
+            '3er': function ({ wuerfel, name, daten }) {
+                return wuerfelSumme(wuerfel.filter(w => w === 3));
+            },
+            '4er': function ({ wuerfel, name, daten }) {
+                return wuerfelSumme(wuerfel.filter(w => w === 4));
+            },
+            '5er': function ({ wuerfel, name, daten }) {
+                return wuerfelSumme(wuerfel.filter(w => w === 5));
+            },
+            '6er': function ({ wuerfel, name, daten }) {
+                return wuerfelSumme(wuerfel.filter(w => w === 6));
+            },
+            'Summe Oben': function ({ wuerfel, name, daten }) {
+                const oben = ['1er', '2er', '3er', '4er', '5er', '6er'];
+                return oben.map(f => daten[f] || 0).reduce((a, b) => a + b, 0);
+            },
+            'Bonus': function ({ wuerfel, name, daten }) {
+                return felder['Summe Oben']({ wuerfel, name, daten }) >= 63 ? 35 : 0;
+            },
+            'Gesamt Oben': function ({ wuerfel, name, daten }) {
+                return felder['Summe Oben']({ wuerfel, name, daten }) + felder['Bonus']({ wuerfel, name, daten });
+            },
+            '3erPasch': function ({ wuerfel, name, daten }) {
+                return wuerfel.some(w => wuerfel.filter(w2 => w2 === w).length >= 3) ? wuerfelSumme(wuerfel) : 0;
+            },
+            '4erPasch': function ({ wuerfel, name, daten }) {
+                return wuerfel.some(w => wuerfel.filter(w2 => w2 === w).length >= 4) ? wuerfelSumme(wuerfel) : 0;
+            },
+            'FullHouse': function ({ wuerfel, name, daten }) {
+                const wuerfelSortiert = wuerfel.sort();
+                return wuerfelSortiert[0] === wuerfelSortiert[1] && wuerfelSortiert[3] === wuerfelSortiert[4] && (wuerfelSortiert[2] === wuerfelSortiert[1] || wuerfelSortiert[2] === wuerfelSortiert[3]) ? 25 : 0;
+            },
+            'KleineStrasse': function ({ wuerfel, name, daten }) {
+                const wuerfelSortiert = wuerfel.sort();
+                return wuerfelSortiert[0] === wuerfelSortiert[1] - 1 && wuerfelSortiert[1] === wuerfelSortiert[2] - 1 && wuerfelSortiert[2] === wuerfelSortiert[3] - 1 || wuerfelSortiert[1] === wuerfelSortiert[2] - 1 && wuerfelSortiert[2] === wuerfelSortiert[3] - 1 && wuerfelSortiert[3] === wuerfelSortiert[4] - 1 ? 30 : 0;
+            },
+            'GrosseStrasse': function ({ wuerfel, name, daten }) {
+                const wuerfelSortiert = wuerfel.sort();
+                return wuerfelSortiert[0] === wuerfelSortiert[1] - 1 && wuerfelSortiert[1] === wuerfelSortiert[2] - 1 && wuerfelSortiert[2] === wuerfelSortiert[3] - 1 && wuerfelSortiert[3] === wuerfelSortiert[4] - 1 ? 40 : 0;
+            },
+            'Kniffel': function ({ wuerfel, name, daten }) {
+                return wuerfel.every(w => w === wuerfel[0]) ? 50 : 0;
+            },
+            'Chance': function ({ wuerfel, name, daten }) {
+                return wuerfelSumme(wuerfel);
+            },
+            'Gesamt Unten': function ({ wuerfel, name, daten }) {
+                const unten = ['3erPasch', '4erPasch', 'FullHouse', 'KleineStrasse', 'GrosseStrasse', 'Kniffel', 'Chance'];
+                return unten.map(f => daten[f] || 0).reduce((a, b) => a + b, 0);
+            },
+            'Gesamt': function ({ wuerfel, name, daten }) {
+                return felder['Gesamt Oben']({ wuerfel, name, daten }) + felder['Gesamt Unten']({ wuerfel, name, daten });
+            },
+
+        }
+
+        function zeigeWuerfel() {
+            const wuerfelDiv = document.getElementById("wuerfel");
+            for (let i = 0; i < wuerfel.length; i++) {
+                if (wuerfelDiv.children.length < wuerfel.length) {
+                    const div = document.createElement("div");
+                    div.id = "w" + i;
+                    div.innerHTML = `
+                        <div class="diceWrap">
+                            <div class="dice rolling">
+                                <div class="diceFace front"></div>
+                                <div class="diceFace up"></div>
+                                <div class="diceFace left"></div>
+                                <div class="diceFace right"></div>
+                                <div class="diceFace bottom"></div>
+                                <div class="diceFace back"></div>
+                            </div>
+                        </div>`;
+                    div.onclick = function () {
+                        fest[i] = !fest[i];
+                        div.className = "wuerfel" + (fest[i] ? " fest" : "");
+                    }
+                    wuerfelDiv.appendChild(div);
+                }
+                wuerfelDiv.children[i].className = "wuerfel" + (fest[i] ? " fest" : "");
+                if (!fest[i]) {
+                    setzeWuerfel(wuerfelDiv.children[i], wuerfel[i]);
+                }
+            }
+        }
+
+        function wuerfeln(naechster = false) {
+            const wuerfelnButton = document.getElementById('wuerfeln');
+            if (naechster) {
+                fest = {};
+                wurf = 1;
+                spielerDran = (spielerDran + 1) % spieler.length;
+            }
+
+            for (let i = 0; i < wuerfel.length; i++) {
+                if (fest[i]) {
+                    continue;
+                }
+                wuerf = Math.floor(Math.random() * 6) + 1;
+                wuerfel[i] = wuerf;
+            }
+            wurf++
+            wuerfelnButton.innerText = "Würfeln: " + (4 - wurf);
+            wuerfelnButton.disabled = wurf > 3;
+
+            zeigeWuerfel()
+            zeigeTabelle()
+        }
+
+        function eintragen(feld) {
+            document.getElementById(wurf + "_" + feld).innerText = felder[feld]();
+        }
+
+
+        function zeigeTabelle() {
+            const tabelle = document.getElementById("tabelle");
+            tabelle.innerHTML = "";
+            for (const feld in felder) {
+                const tr = document.createElement("tr");
+                const td1 = document.createElement("td");
+                td1.innerText = feld;
+                td1.id = wurf + "_" + feld;
+                td1.className = "titel"
+                td1.style.color = "black";
+                tr.appendChild(td1);
+                Object.entries(ergebnisse).forEach(([name, daten], i) => {
+                    const istDran = spielerDran === i;
+                    const td2 = document.createElement("td");
+
+                    const summen = ['Name', 'Summe Oben', 'Bonus', 'Gesamt Oben', 'Gesamt Unten', 'Gesamt'];
+                    const istSummenFeld = summen.includes(feld);
+
+                    if (istDran) {
+                        td1.className += " active";
+                        td2.className += " active";
+                    }
+                    if (daten[feld] !== undefined || istSummenFeld) {
+                        if (istSummenFeld) {
+                            td1.className += " summe";
+                            td2.className += " summe";
+                        }
+                        td2.innerText = istSummenFeld ? felder[feld]({ wuerfel, name, daten }) : daten[feld];
+                        td2.className += " filled";
+                    } else if (istDran) {
+                        const feldWert = felder[feld]({ wuerfel: [...wuerfel], name, daten })
+                        td2.innerText = feldWert;
+                        tr.className = "eintragbar" + (feldWert ? "" : " strich");
+                        tr.onclick = function () {
+                            daten[feld] = feldWert;
+                            wuerfeln(true)
+                            document.querySelector("button").disabled = false;
+                        }
+                    }
+
+                    if (feld === 'Name') {
+                        td2.className += " name"
+                    }
+
+                    tr.appendChild(td2);
+                });
+                tabelle.appendChild(tr);
+            }
+        }
+
+        function setzeWuerfel(el = document, num) {
+            const perFace = [
+                [-0.1, 0.3, -1],
+                [-0.1, 0.6, -0.4],
+                [-0.85, -0.42, 0.73],
+                [-0.8, 0.3, -0.75],
+                [0.3, 0.45, 0.9],
+                [-0.16, 0.6, 0.18]
+            ];
+            el.querySelector('.dice').style.transform = `rotate3d(${perFace[num]}, 180deg)`
+            setTimeout(() => {
+                el.querySelector('.dice').style.transform = `rotate3d(${perFace[num - 1]}, 180deg)`
+            }, 100)
+        }
+        wuerfeln();
+    </script>
+    <style>
+        :root {
+            --diceBg: #f6f3f0;
+            --diceColor: #131210;
+        }
+
+        .dice {
+            position: absolute;
+            width: 100px;
+            height: 100px;
+            top: calc(50% - 50px);
+            left: calc(50% - 50px);
+            transform-style: preserve-3d;
+            transform: rotate3d(0, 0.9, 0.9, 90deg);
+            transition: 0.5s cubic-bezier(0.42, 1.57, 0.62, 0.86);
+
+            &.rolling {
+                animation: rotatePerFace 3s cubic-bezier(0.42, 1.57, 0.62, 0.86) infinite;
+            }
+
+            &.throw {
+                animation: rotateDice 0.7s ease-in reverse, throwDice 1s linear;
+            }
+
+            .diceFace {
+                box-sizing: border-box;
+                position: absolute;
+                width: 100px;
+                height: 100px;
+                background-color: var(--diceBg);
+                border: 2px solid lighten(var(--diceBg), 10%);
+                border-radius: 15px;
+                transform-style: preserve-3d;
+                transition: 0.5s;
+
+                &::before {
+                    position: absolute;
+                    content: "";
+                    width: 100%;
+                    height: 100%;
+                    background-color: lighten(var(--diceBg), 10%);
+                    border-radius: 20px;
+                    transform: translateZ(-1px);
+                }
+
+                &::after {
+                    position: absolute;
+                    content: "";
+                    width: 20px;
+                    height: 20px;
+                    top: 50%;
+                    left: 50%;
+                    margin: -10px 0 0 -10px;
+                    background-color: var(--diceColor);
+                    border-radius: 100%;
+                    transform: translateZ(1px);
+                }
+            }
+
+            .front {
+                transform: translateZ(50px);
+
+                &::after {
+                    width: 20px;
+                    height: 20px;
+                    margin: -10px 0 0 -10px;
+                    background-color: var(--diceColor);
+                }
+            }
+
+            .up {
+                transform: rotateX(90deg) translateZ(50px);
+
+                &::after {
+                    margin: -30px 0 0 -30px;
+                    box-shadow: 40px 40px var(--diceColor);
+                }
+            }
+
+            .left {
+                transform: rotateY(-90deg) translateZ(50px);
+
+                &::after {
+                    margin: -40px 0 0 -40px;
+                    box-shadow: 30px 30px var(--diceColor), 60px 60px var(--diceColor);
+                }
+            }
+
+            .right {
+                transform: rotateY(90deg) translateZ(50px);
+
+                &::after {
+                    margin: -30px 0 0 -30px;
+                    background-color: var(--diceColor);
+                    box-shadow: 40px 0px var(--diceColor), 0px 40px var(--diceColor),
+                        40px 40px var(--diceColor);
+                }
+            }
+
+            .bottom {
+                transform: rotateX(-90deg) translateZ(50px);
+
+                &::after {
+                    margin: -36px 0 0 -36px;
+                    box-shadow: 26px 26px var(--diceColor), 52px 52px var(--diceColor),
+                        52px 0px var(--diceColor), 0px 52px var(--diceColor);
+                }
+            }
+
+            .back {
+                transform: rotateX(180deg) translateZ(50px);
+
+                &::after {
+                    margin: -40px 0 0 -30px;
+                    box-shadow: 40px 0px var(--diceColor), 0px 30px var(--diceColor),
+                        40px 30px var(--diceColor), 0px 60px var(--diceColor), 40px 60px var(--diceColor);
+                }
+            }
+        }
+
+        .diceWrap {
+            position: absolute;
+            width: 200px;
+            height: 200px;
+            transform: scale(0.45);
+
+            &::before {
+                position: absolute;
+                content: "";
+                width: 70%;
+                height: 10%;
+                top: 90%;
+                left: 15%;
+                background: rgba(0, 0, 0, 0.2);
+                border-radius: 100%;
+                filter: blur(10px);
+            }
+        }
+
+        @keyframes rotateDice {
+            30% {
+                transform: rotate3d(1, 1, 1, 0deg);
+            }
+
+            100% {
+                transform: rotate3d(1, 1, 1, 720deg);
+            }
+        }
+    </style>
+</body>
+
+</html>
