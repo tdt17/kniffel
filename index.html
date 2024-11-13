@@ -106,6 +106,22 @@
             return wuerfel.reduce((a, b) => a + b, 0);
         }
 
+        function istKniffel(wuerfel) {
+            return wuerfel.every(w => w === wuerfel[0]);
+        }
+
+        function anzahlProAugenzahl(wuerfel) {
+            return wuerfel.reduce((a, b) => ({ ...a, [b]: (a[b] || 0) + 1 }), {});
+        }
+
+        function anzahlen(wuerfel) {
+            return Object.values(anzahlProAugenzahl(wuerfel));
+        }
+
+        function kombinationenTesten(zahlen, kombinationen) {
+            return kombinationen.some(k => k.every(z => zahlen.includes(z)));
+        }
+
         const felder = {
             'Name': function ({ wuerfel, name, daten }) {
                 return name
@@ -139,27 +155,30 @@
                 return felder['Summe Oben']({ wuerfel, name, daten }) + felder['Bonus']({ wuerfel, name, daten });
             },
             '3erPasch': function ({ wuerfel, name, daten }) {
-                return wuerfel.some(w => wuerfel.filter(w2 => w2 === w).length >= 3) ? wuerfelSumme(wuerfel) : 0;
+                if (istKniffel(wuerfel)) return 30;
+                return anzahlen(wuerfel).some(x => x >= 3) ? wuerfelSumme(wuerfel) : 0;
             },
             '4erPasch': function ({ wuerfel, name, daten }) {
-                return wuerfel.some(w => wuerfel.filter(w2 => w2 === w).length >= 4) ? wuerfelSumme(wuerfel) : 0;
+                if (istKniffel(wuerfel)) return 30;
+                return anzahlen(wuerfel).some(x => x >= 4) ? wuerfelSumme(wuerfel) : 0;
             },
             'FullHouse': function ({ wuerfel, name, daten }) {
-                const wuerfelSortiert = wuerfel.sort();
-                return wuerfelSortiert[0] === wuerfelSortiert[1] && wuerfelSortiert[3] === wuerfelSortiert[4] && (wuerfelSortiert[2] === wuerfelSortiert[1] || wuerfelSortiert[2] === wuerfelSortiert[3]) ? 25 : 0;
+                const kombinationen = [[2, 3]]
+                return istKniffel(wuerfel) || kombinationenTesten(anzahlen(wuerfel), kombinationen) ? 25 : 0;
             },
             'KleineStrasse': function ({ wuerfel, name, daten }) {
-                const wuerfelSortiert = wuerfel.sort();
-                return wuerfelSortiert[0] === wuerfelSortiert[1] - 1 && wuerfelSortiert[1] === wuerfelSortiert[2] - 1 && wuerfelSortiert[2] === wuerfelSortiert[3] - 1 || wuerfelSortiert[1] === wuerfelSortiert[2] - 1 && wuerfelSortiert[2] === wuerfelSortiert[3] - 1 && wuerfelSortiert[3] === wuerfelSortiert[4] - 1 ? 30 : 0;
+                const kombinationen = [[1, 2, 3, 4], [2, 3, 4, 5], [3, 4, 5, 6]];
+                return istKniffel(wuerfel) || kombinationenTesten(wuerfel, kombinationen) ? 30 : 0;
             },
             'GrosseStrasse': function ({ wuerfel, name, daten }) {
-                const wuerfelSortiert = wuerfel.sort();
-                return wuerfelSortiert[0] === wuerfelSortiert[1] - 1 && wuerfelSortiert[1] === wuerfelSortiert[2] - 1 && wuerfelSortiert[2] === wuerfelSortiert[3] - 1 && wuerfelSortiert[3] === wuerfelSortiert[4] - 1 ? 40 : 0;
+                const kombinationen = [[1, 2, 3, 4, 5], [2, 3, 4, 5, 6]];
+                return istKniffel(wuerfel) || kombinationenTesten(wuerfel, kombinationen) ? 40 : 0;
             },
             'Kniffel': function ({ wuerfel, name, daten }) {
-                return wuerfel.every(w => w === wuerfel[0]) ? 50 : 0;
+                return istKniffel(wuerfel) ? 50 : 0;
             },
             'Chance': function ({ wuerfel, name, daten }) {
+                if (istKniffel(wuerfel)) return 30;
                 return wuerfelSumme(wuerfel);
             },
             'Gesamt Unten': function ({ wuerfel, name, daten }) {
